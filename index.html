@@ -172,6 +172,7 @@
             cursor: pointer;
             text-decoration: underline;
             padding: 0;
+            display: none; /* 默认隐藏管理按钮 */
         }
 
        .login-prompt {
@@ -394,7 +395,7 @@
             <div class="comments-header">
                 评论区
                 <div class="admin-controls">
-                    <button class="admin-btn" id="deleteCommentsBtn">管理操作</button>
+                    <button class="admin-btn" id="deleteCommentsBtn">删除所有评论</button>
                 </div>
             </div>
             
@@ -461,12 +462,9 @@
         <div class="modal-content">
             <span class="close" id="closeDeleteModal">×</span>
             <h2>确认删除所有评论</h2>
-            <p>请输入管理员密码以执行此操作</p>
-            <form class="auth-form" id="deleteCommentsForm">
-                <input type="password" id="deletePassword" placeholder="输入管理员密码" required="">
-                <div class="error-message" id="deleteError">密码错误</div>
-                <button type="submit" class="auth-btn">确认删除所有评论</button>
-            </form>
+            <p>此操作将删除所有评论，且无法恢复。确定要继续吗？</p>
+            <button type="button" class="auth-btn" id="confirmDeleteBtn" style="background-color: #f44336;">确认删除</button>
+            <button type="button" class="auth-btn" id="cancelDeleteBtn" style="margin-top: 10px;">取消</button>
         </div>
     </div>
 
@@ -492,31 +490,21 @@
             const closeRegister = document.getElementById('closeRegister');
             const closeLogin = document.getElementById('closeLogin');
             const closeDeleteModal = document.getElementById('closeDeleteModal');
+            const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+            const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
             const registerForm = document.getElementById('registerForm');
             const loginForm = document.getElementById('loginForm');
-            const deleteCommentsForm = document.getElementById('deleteCommentsForm');
             
             const regUsernameError = document.getElementById('regUsernameError');
             const regPasswordError = document.getElementById('regPasswordError');
             const regConfirmError = document.getElementById('regConfirmError');
             const loginError = document.getElementById('loginError');
-            const deleteError = document.getElementById('deleteError');
             
             let users = JSON.parse(localStorage.getItem('owd_users')) || {};
             let comments = JSON.parse(localStorage.getItem('owd_comments')) || [];
             let currentUserId = localStorage.getItem('owd_currentUserId');
-            
-            // 简化密码验证机制，确保功能正常
-            function decodeAdminKey(encoded) {
-                let key = '';
-                for (let i = 0; i < encoded.length; i++) {
-                    key += String.fromCharCode(encoded.charCodeAt(i) - 1);
-                }
-                return key;
-            }
-            
-            // 加密存储的管理员密码
-            const adminKey = decodeAdminKey('234bcdRR');
+            // 定义有权限执行删除操作的用户名
+            const authorizedUsername = "Liuxiriver湎溪";
             
             // 防注入相关函数
             function escapeHtml(unsafe) {
@@ -562,6 +550,19 @@
             }
             
             renderComments();
+            checkAdminPermissions();
+            
+            function checkAdminPermissions() {
+                // 检查当前登录用户是否为授权用户
+                if (currentUserId && users[currentUserId] && 
+                    users[currentUserId].username === authorizedUsername) {
+                    // 显示管理按钮
+                    deleteCommentsBtn.style.display = 'inline-block';
+                } else {
+                    // 隐藏管理按钮
+                    deleteCommentsBtn.style.display = 'none';
+                }
+            }
             
             if (currentUserId && users[currentUserId]) {
                 loginPrompt.style.display = 'none';
@@ -571,13 +572,28 @@
             
             // 评论删除相关事件
             deleteCommentsBtn.addEventListener('click', function() {
-                deleteCommentsModal.style.display = 'block';
-                deleteError.style.display = 'none';
-                document.getElementById('deletePassword').value = '';
+                // 再次验证权限（安全措施）
+                if (currentUserId && users[currentUserId] && 
+                    users[currentUserId].username === authorizedUsername) {
+                    deleteCommentsModal.style.display = 'block';
+                }
             });
             
             closeDeleteModal.addEventListener('click', function() {
                 deleteCommentsModal.style.display = 'none';
+            });
+            
+            cancelDeleteBtn.addEventListener('click', function() {
+                deleteCommentsModal.style.display = 'none';
+            });
+            
+            confirmDeleteBtn.addEventListener('click', function() {
+                // 执行删除操作
+                comments = [];
+                localStorage.setItem('owd_comments', JSON.stringify(comments));
+                renderComments();
+                deleteCommentsModal.style.display = 'none';
+                alert('所有评论已成功删除');
             });
             
             window.addEventListener('click', function(event) {
@@ -586,25 +602,6 @@
                 }
             });
             
-            deleteCommentsForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const password = document.getElementById('deletePassword').value;
-                
-                // 验证密码
-                if (password === adminKey) {
-                    if (confirm('确定要删除所有评论吗？此操作不可恢复！')) {
-                        comments = [];
-                        localStorage.setItem('owd_comments', JSON.stringify(comments));
-                        renderComments();
-                        deleteCommentsModal.style.display = 'none';
-                        alert('所有评论已成功删除');
-                    }
-                } else {
-                    deleteError.style.display = 'block';
-                }
-            });
-            
-            // 其他原有功能代码保持不变
             loginBtn.addEventListener('click', function() {
                 loginModal.style.display = 'block';
             });
@@ -683,6 +680,9 @@
                 commentForm.style.display = 'block';
                 currentUser.textContent = users[userId].username;
                 
+                // 检查是否为授权用户，更新管理按钮显示状态
+                checkAdminPermissions();
+                
                 registerModal.style.display = 'none';
                 alert('注册成功！已自动登录');
                 resetRegisterForm();
@@ -702,6 +702,9 @@
                     commentForm.style.display = 'block';
                     currentUser.textContent = users[userId].username;
                     
+                    // 检查是否为授权用户，更新管理按钮显示状态
+                    checkAdminPermissions();
+                    
                     loginModal.style.display = 'none';
                     loginForm.reset();
                     loginError.style.display = 'none';
@@ -716,6 +719,8 @@
                 
                 loginPrompt.style.display = 'block';
                 commentForm.style.display = 'none';
+                // 退出登录后隐藏管理按钮
+                deleteCommentsBtn.style.display = 'none';
                 
                 alert('已成功退出登录');
             });
